@@ -35,6 +35,7 @@
 
 //coding
 
++ (NSArray *)codableKeys;
 + (NSDictionary *)codableProperties;
 - (void)setWithCoder:(NSCoder *)aDecoder;
 

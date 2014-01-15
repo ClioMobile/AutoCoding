@@ -87,15 +87,20 @@
     return [data writeToFile:filePath atomically:useAuxiliaryFile];
 }
 
++ (NSArray *)codableKeys
+{
+    return nil;
+}
+
 + (NSDictionary *)codableProperties
 {
     //deprecated
-    SEL deprecatedSelector = NSSelectorFromString(@"codableKeys");
-    if ([self respondsToSelector:deprecatedSelector] || [self instancesRespondToSelector:deprecatedSelector])
-    {
-        NSLog(@"AutoCoding Warning: codableKeys method is no longer supported. Use codableProperties instead.");
-    }
-    deprecatedSelector = NSSelectorFromString(@"uncodableKeys");
+//    SEL deprecatedSelector = NSSelectorFromString(@"codableKeys");
+//    if ([self respondsToSelector:deprecatedSelector] || [self instancesRespondToSelector:deprecatedSelector])
+//    {
+//        NSLog(@"AutoCoding Warning: codableKeys method is no longer supported. Use codableProperties instead.");
+//    }
+    SEL deprecatedSelector = NSSelectorFromString(@"uncodableKeys");
     if ([self respondsToSelector:deprecatedSelector] || [self instancesRespondToSelector:deprecatedSelector])
     {
         NSLog(@"AutoCoding Warning: uncodableKeys method is no longer supported. Use ivars, or synthesize your properties using non-KVC-compliant names to avoid coding them instead.");
@@ -111,6 +116,7 @@
     unsigned int propertyCount;
     __autoreleasing NSMutableDictionary *codableProperties = [NSMutableDictionary dictionary];
     objc_property_t *properties = class_copyPropertyList(self, &propertyCount);
+    BOOL hasCodableKeys = [self codableKeys] != nil;
     for (unsigned int i = 0; i < propertyCount; i++)
     {
         //get property name
@@ -119,7 +125,7 @@
         __autoreleasing NSString *key = @(propertyName);
 
         //check if codable
-        if (![uncodableProperties containsObject:key])
+        if (![uncodableProperties containsObject:key] && (!hasCodableKeys || [[self codableKeys] containsObject:key]))
         {
             //get property type
             Class propertyClass = nil;
@@ -200,7 +206,7 @@
             [(NSMutableDictionary *)codableProperties addEntriesFromDictionary:[subclass codableProperties]];
             subclass = [subclass superclass];
         }
-        codableProperties = [NSMutableDictionary dictionaryWithDictionary:codableProperties];
+        codableProperties = [NSDictionary dictionaryWithDictionary:codableProperties];
         
         //make the association atomically so that we don't need to bother with an @synchronize
         objc_setAssociatedObject([self class], _cmd, codableProperties, OBJC_ASSOCIATION_RETAIN);
@@ -208,10 +214,15 @@
     return codableProperties;
 }
 
+- (NSArray *)codableKeys
+{
+    return [[self class] codableKeys] ? [[self class] codableKeys] : [[self codableProperties] allKeys];
+}
+
 - (NSDictionary *)dictionaryRepresentation
 {
     NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-    for (__unsafe_unretained NSString *key in [self codableProperties])
+    for (__unsafe_unretained NSString *key in [self codableKeys])
     {
         id value = [self valueForKey:key];
         if (value) dict[key] = value;
@@ -224,7 +235,7 @@
     BOOL secureAvailable = [aDecoder respondsToSelector:@selector(decodeObjectOfClass:forKey:)];
     BOOL secureSupported = [[self class] supportsSecureCoding];
     NSDictionary *properties = [self codableProperties];
-    for (NSString *key in properties)
+    for (NSString *key in [self codableKeys])
     {
         id object = nil;
         Class class = properties[key];
@@ -255,7 +266,7 @@
 
 - (void)encodeWithCoder:(NSCoder *)aCoder
 {
-    for (NSString *key in [self codableProperties])
+    for (NSString *key in [self codableKeys])
     {
         id object = [self valueForKey:key];
         if (object) [aCoder encodeObject:object forKey:key];
